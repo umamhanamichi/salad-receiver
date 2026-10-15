@@ -104,6 +104,6 @@ app.get('/health', (req, res) => {
   res.json({ ok: true, uptime: process.uptime() });
 });
 
-app.listen(PORT, () => {
-  console.log(`vps-receiver listening on :${PORT}`);
+app.listen(PORT, '0.0.0.0', () => {
+  console.log(`vps-receiver listening on 0.0.0.0:${PORT}`);
 });
