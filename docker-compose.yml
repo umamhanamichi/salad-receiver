@@ -1,0 +1,15 @@
+services:
+  vps-receiver:
+    build: .
+    image: vps-receiver:latest
+    container_name: vps-receiver
+    restart: unless-stopped
+    ports:
+      - "4567:4567"
+    env_file:
+      - .env
+    healthcheck:
+      test: ["CMD", "wget", "-qO-", "http://localhost:4567/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
