@@ -22,10 +22,12 @@ function requireApiKey(req, res, next) {
   next();
 }
 
+// Purge node yang tidak kirim ping lebih dari 90 detik (node lapor tiap 60s)
 function purgeStaleNodes() {
   const now = Date.now();
   for (const [id, node] of nodes.entries()) {
-    if (now - new Date(node.last_seen).getTime() > 5 * 60 * 1000) {
+    if (now - new Date(node.last_seen).getTime() > 90 * 1000) {
+      console.log(`[purge] Stale node removed (>90s): ${id} (${node.armada})`);
       nodes.delete(id);
     }
   }
@@ -36,12 +38,15 @@ app.post('/api/node/report', requireApiKey, (req, res) => {
   const {
     machine_id, instance_id, armada, gpu_name,
     hashrate_1min, hashrate_15min, hashrate_1hr, hashrate_6hr,
-    power_watt, country, min_th, timestamp
+    power_watt, country, min_th
   } = req.body;
 
   if (!machine_id || !armada || !gpu_name) {
     return res.status(400).json({ error: 'machine_id, armada, gpu_name required' });
   }
+
+  // Gunakan jam server VPS agar bebas dari clock skew client
+  const serverNowIso = new Date().toISOString();
 
   nodes.set(machine_id, {
     machine_id,
@@ -55,12 +60,27 @@ app.post('/api/node/report', requireApiKey, (req, res) => {
     power_watt: power_watt || 0,
     country: country || 'UNKNOWN',
     min_th: min_th || 0,
-    last_seen: timestamp || new Date().toISOString(),
+    last_seen: serverNowIso,
     status: 'online'
   });
 
   console.log(`[report] ${armada} | ${machine_id} | ${gpu_name} | ${hashrate_1min} TH/s`);
   res.json({ ok: true });
+});
+
+// POST /api/node/deregister - Langsung hapus node saat di-kill watchdog
+app.post('/api/node/deregister', requireApiKey, (req, res) => {
+  const { machine_id, reason } = req.body;
+
+  if (!machine_id) {
+    return res.status(400).json({ error: 'machine_id required' });
+  }
+
+  const existed = nodes.has(machine_id);
+  nodes.delete(machine_id);
+
+  console.log(`[deregister] Node ${machine_id} deleted. Reason: ${reason || 'kicked'}`);
+  res.json({ ok: true, deleted: existed });
 });
 
 // GET /api/nodes
